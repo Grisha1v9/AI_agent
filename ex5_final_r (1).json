@@ -1,0 +1,793 @@
+{
+  "name": "ex5_final_r",
+  "nodes": [
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.topic.title }}",
+        "options": {
+          "systemMessage": "=Ты — ИИ-агент внутри n8n. Если для ответа нужны актуальные данные из интернета или новости, ты НЕ отвечаешь сразу. Вместо этого ты пишешь строку ровно в формате tavily(query=\"...\"), где в кавычках — краткий поисковый запрос который будет максимально соответствовать сообщению пользователя. Никакого другого текста. Весь текст на русском\n\nВ ответе от тебя пользователь ждет следующее сообщение: tavily(query=\"{{ $json.topic.title }}\") "
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.8,
+      "position": [
+        -1424,
+        -496
+      ],
+      "id": "21b7e2b9-d3e1-4cf9-836c-27f5e3c38aaf",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "GigaChat/GigaChat-2-Max",
+          "mode": "list",
+          "cachedResultName": "GigaChat/GigaChat-2-Max"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -1424,
+        -304
+      ],
+      "id": "20abb7fd-3833-4d1f-abe3-b0eb3c4d6a71",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "a9TD2kiZJAH3UJ7K",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Берём все items, пришедшие от AI Agent\nconst items = $input.all();\n\nreturn items.map(item => {\n // 1. Достаём текст от LLM.\n // 👉 Поменяй поле под свою схему, если нужно:\n //    - item.json.answer\n //    - item.json.text\n //    - item.json.data?.[0]?.text  и т.д.\n const raw = String(\n  $input.first().json.output\n ).trim();\n\n // 2. Проверяем формат tavily(query=\"...\")\n const regex = /^tavily\\(query=\"(.+)\"\\)$/;\n const match = raw.match(regex);\n\n const isTavily = !!match;\n const query = match ? match[1] : null;\n\n // 3. Добавляем служебные поля в item\n item.json.llmRaw = raw;       // исходный ответ LLM\n item.json.isTavily = isTavily; // true/false — это запрос к интернету?\n item.json.tavilyQuery = query; // сам текст внутри query=\"...\"\n\n return item;\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1120,
+        -496
+      ],
+      "id": "11b62594-3a81-4715-aaf4-559dec58240d",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.tavily.com/search",
+        "sendHeaders": true,
+        "specifyHeaders": "json",
+        "jsonHeaders": "{\n  \"Authorization\": \"Bearer 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\"\n}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n   \"query\": \"={{$json.tavilyQuery}}\",\n   \"search_depth\": \"basic\",\n   \"include_answer\": true\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -816,
+        -448
+      ],
+      "id": "2c39040b-f80c-4ed8-9396-3a6f9cfb214c",
+      "name": "HTTP Request",
+      "retryOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "f76a2029-b00d-4b03-a3fa-a2d235a892ca",
+              "leftValue": "={{ $json.isTavily }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -976,
+        -320
+      ],
+      "id": "ee774eec-e301-4979-be50-0c75a0bdb93e",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.results }}",
+        "options": {
+          "systemMessage": "ты получаешь результаты поиска по конкретной тебе (факты). Тебе необходимо использовать поля answer и results, чтобы понятно и кратко изложить пользователю предоставленную информацию. \nОбязательно опирайся только на информацию из Tavily, не придумывай факты"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.8,
+      "position": [
+        -608,
+        -448
+      ],
+      "id": "c09e38e0-2008-457e-ab53-cada59927081",
+      "name": "AI Agent1"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "GigaChat/GigaChat-2-Max",
+          "mode": "list",
+          "cachedResultName": "GigaChat/GigaChat-2-Max"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -608,
+        -272
+      ],
+      "id": "4155da91-1f51-4dcf-85b9-2fe384327498",
+      "name": "OpenAI Chat Model1",
+      "credentials": {
+        "openAiApi": {
+          "id": "a9TD2kiZJAH3UJ7K",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -3168,
+        -64
+      ],
+      "id": "40ac7f41-8ada-4d85-a339-5890bd3c6bd5",
+      "name": "Telegram Trigger",
+      "webhookId": "ac2802a9-0e9c-4794-8d80-be4ca69e5c96",
+      "credentials": {
+        "telegramApi": {
+          "id": "so1YmGOticRnQ1aT",
+          "name": "ex_05"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "={{ $('Code5').item.json.topic.id }}:{{ $('Code5').item.json.topic.title }}\n{{ $('Code5').item.json.topic.index }}/{{ $('Code5').item.json.topic.total }}\n\n{{ $json.output }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -272,
+        -448
+      ],
+      "id": "876ee4c2-2151-4ffa-80d8-fcbd65e17422",
+      "name": "Telegram1",
+      "webhookId": "3be1f2ac-6173-4526-af69-537f0e869fd9",
+      "credentials": {
+        "telegramApi": {
+          "id": "so1YmGOticRnQ1aT",
+          "name": "ex_05"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "eff0bcb2-de7e-4d21-b93a-01fe2c9504a9",
+              "leftValue": "={{ $json.hasPlan }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "7dc0e1ab-7d7e-496a-8791-75858d6c3fb3",
+              "leftValue": "={{ $json.done }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -1936,
+        48
+      ],
+      "id": "01fbcd68-c47d-423d-850b-8c3155462f66",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "jsCode": "const sd = $getWorkflowStaticData('global'); \n\nsd.learning ??= { users: {} };\n\nconst userId = $('Telegram Trigger').first().json.message.chat.id// получите из Telegram/Webhook\nif (!userId) throw new Error('userId is required');\n\nconst user = sd.learning.users[userId] ??= {\n  profile: {},\n  plan: [],\n  currentIndex: 0,\n  sentByPlanItem: {}\n};\n\nconst hasPlan = Array.isArray(user.plan) && user.plan.length > 0;\n\nreturn [{\n  json: {\n    userId,\n    hasPlan,\n    // удобно пробросить дальше\n    currentIndex: user.currentIndex,\n    planSize: user.plan.length,\n    profile: user.profile,\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2672,
+        -16
+      ],
+      "id": "36e88865-63e0-484e-ada8-d5e9a1141a96",
+      "name": "Code2"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $('Telegram Trigger').item.json.message.text }}",
+        "options": {
+          "systemMessage": "Ты — AI-агент “Learning Plan Builder”. Твоя задача — по запросу пользователя составить практичный персональный план обучения и вернуть результат в строго структурированном JSON.\n\nПравила:\n 1. Всегда отвечай только валидным JSON. Никакого Markdown, текста, комментариев, префиксов/суффиксов, кода-блоков.\n 2. Структура ответа должна строго соответствовать схеме ниже. Не добавляй поля, которых нет в схеме.\n 3. План должен содержать от 3 до 6 пунктов.\n 4. Пункты должны идти от базового к продвинутому.\n 5. Язык плана — язык запроса пользователя (если явно не указано иначе).\n 6. Не включай внешние ссылки, источники, названия курсов/платформ.\n\nСхема JSON (строго):\n{\n“plan_title”: string,\n“plan”: [\n{\n“id”: “p1”,\n“title”: string\n}\n]\n}\n\nТребования к полям:\n• id строго в формате p1, p2, p3… по порядку.\n• В массиве plan должно быть 3–6 объектов.\n• В ответе должны быть только поля plan_title и plan, без любых дополнительных полей."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.8,
+      "position": [
+        -1712,
+        48
+      ],
+      "id": "daf5b7ad-10d2-466f-94b2-37496cb99814",
+      "name": "AI Agent2"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "GigaChat/GigaChat-2-Max",
+          "mode": "list",
+          "cachedResultName": "GigaChat/GigaChat-2-Max"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        -1712,
+        224
+      ],
+      "id": "98811aee-43e4-4e97-8ce7-65d01166862d",
+      "name": "OpenAI Chat Model2",
+      "credentials": {
+        "openAiApi": {
+          "id": "a9TD2kiZJAH3UJ7K",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// @ts-nocheck\n\nfunction extractJsonString(text) {\n  if (typeof text !== 'string') return null;\n\n  let t = text.trim();\n\n  // Strip code fences if present\n  if (t.startsWith('```')) {\n    t = t.replace(/^```[a-zA-Z]*\\s*/, '');\n    t = t.replace(/```$/, '').trim();\n  }\n\n  // Whole string is JSON\n  try {\n    JSON.parse(t);\n    return t;\n  } catch (e) {}\n\n  // Try extract first {...} block\n  const first = t.indexOf('{');\n  const last = t.lastIndexOf('}');\n  if (first !== -1 && last !== -1 && last > first) {\n    const candidate = t.slice(first, last + 1);\n    try {\n      JSON.parse(candidate);\n      return candidate;\n    } catch (e) {}\n  }\n\n  return null;\n}\n\nfunction normalizePlanObject(obj) {\n  if (!obj || typeof obj !== 'object') throw new Error('Plan must be an object');\n\n  const requiredTop = ['plan_title', 'plan'];\n  for (const k of requiredTop) {\n    if (!(k in obj)) throw new Error('Plan JSON missing top-level field: ' + k);\n  }\n\n  const planTitle = String(obj.plan_title ?? '').trim();\n  if (!planTitle) throw new Error('plan_title must be a non-empty string');\n\n  if (!Array.isArray(obj.plan)) throw new Error('plan must be an array');\n\n  // 3..6 items only\n  if (obj.plan.length < 3 || obj.plan.length > 6) {\n    throw new Error('plan must contain from 3 to 6 items');\n  }\n\n  const plan = obj.plan.map((it, i) => {\n    const item = (it && typeof it === 'object') ? it : {};\n    const expectedId = 'p' + (i + 1);\n\n    const title = String(item.title ?? '').trim();\n    if (!title) throw new Error(`plan[${i}] title must be a non-empty string`);\n\n    return { id: expectedId, title };\n  });\n\n  return { plan_title: planTitle, plan };\n}\n\n// --- Main ---\n\n// Берём userId из Telegram Trigger (надёжно)\nconst userId = String($('Telegram Trigger').first().json?.message?.chat?.id);\nif (!userId) throw new Error('Could not resolve userId from Telegram message');\n\nconst raw = String($input.first()?.json?.output ?? $input.first()?.json?.text ?? $json.output ?? $json.text ?? '');\nconst jsonStr = extractJsonString(raw);\nif (!jsonStr) throw new Error('Could not find valid plan JSON in output/text');\n\nlet planObj;\n\n// 🔥 ОБРАБОТКА ЭКРАНИРОВАННОГО JSON\ntry {\n  planObj = JSON.parse(jsonStr);\n} catch (e) {\n  try {\n    if (jsonStr.startsWith('\"') && jsonStr.endsWith('\"')) {\n      const unescaped = jsonStr.slice(1, -1)\n        .replace(/\\\\\"/g, '\"')\n        .replace(/\\\\n/g, '\\n')\n        .replace(/\\\\r/g, '\\r')\n        .replace(/\\\\t/g, '\\t');\n      planObj = JSON.parse(unescaped);\n    } else {\n      throw new Error('Cannot unescape: not wrapped in quotes');\n    }\n  } catch (e2) {\n    throw new Error('Failed to parse JSON after unescaping: ' + e2.message);\n  }\n}\n\nplanObj = normalizePlanObject(planObj);\n\n// Save to workflow static data\nconst sd = $getWorkflowStaticData('global');\nsd.learning ??= { users: {} };\n\n// ✅ ПОЛНАЯ ОЧИСТКА СТАРОГО СОСТОЯНИЯ\ndelete sd.learning.users[userId];\n\n// ✅ СОЗДАНИЕ НОВОГО ПЛАНА\nsd.learning.users[userId] = {\n  profile: {},\n  plan: planObj.plan,\n  plan_title: planObj.plan_title,\n  currentIndex: 0,\n  sentByPlanItem: {}\n};\n\nreturn [{\n  json: {\n    userId,\n    saved: true,\n    hasPlan: true,\n    plan_title: planObj.plan_title,\n    planSize: planObj.plan.length,\n    plan: planObj.plan,\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1376,
+        48
+      ],
+      "id": "d39a9848-6c16-4130-9316-a8910b881f6f",
+      "name": "Code3"
+    },
+    {
+      "parameters": {
+        "jsCode": "// @ts-nocheck\n\nconst input = $input.first()?.json ?? {};\n\nconst userId = String(input.userId ?? '');\nif (!userId) throw new Error('Could not resolve userId from $input.first().json.userId');\n\nconst planTitle = String(input.plan_title ?? '').trim();\n\nconst plan = Array.isArray(input.plan) ? input.plan : [];\n\nlet text = '';\n\nif (plan.length > 0) {\n  const lines = [];\n  lines.push('Ваш план обучения:');\n  if (planTitle) lines.push(planTitle);\n  lines.push('');\n\n  for (let i = 0; i < plan.length; i++) {\n    const p = plan[i] ?? {};\n    const title = String(p.title ?? '(без названия)');\n    lines.push(String(i + 1) + ') ' + title);\n  }\n\n  text = lines.join('\\n').trim();\n\n  const MAX = 3500;\n  if (text.length > MAX) {\n    text = text.slice(0, MAX - 20).trim() + '\\n\\n(сообщение сокращено)';\n  }\n} else {\n  text = 'План обучения пока не найден. Напишите цель обучения, и я составлю план.';\n}\n\nreturn [{ json: { userId, text } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1152,
+        48
+      ],
+      "id": "d36d6c26-fa16-4810-a07e-6fe5caa978f7",
+      "name": "Code4"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.userId }}",
+        "text": "={{ $json.text }}\n\nНажми \"дальше\", чтобы подтвердить план и начать обучение",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -912,
+        48
+      ],
+      "id": "66fca113-e11b-4c46-a0d7-9ea4fa798bd1",
+      "name": "Telegram2",
+      "webhookId": "e5d7d28e-2d1c-4a79-a166-798a9e600d71",
+      "credentials": {
+        "telegramApi": {
+          "id": "so1YmGOticRnQ1aT",
+          "name": "ex_05"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// @ts-nocheck\n// NODE B (Format/Pass-through): делает “всё остальное” (формирование структуры под агента/следующие ноды).\n// По сути — безопасно нормализует и отдаёт ровно то, что нужно дальше.\n\nconst input = $('If1').first()?.json ?? {};\n\nconst userId = $('Telegram Trigger').first().json.message.chat.id\nif (!userId) throw new Error('userId is required');\n\nconst hasPlan = Boolean(input.hasPlan);\nconst done = Boolean(input.done);\n\nif (!hasPlan) {\n  // Пробрасываем как есть (ветка: плана нет или план завершён и очищен)\n  return [{\n    json: {\n      userId,\n      hasPlan,\n      done,\n      needPlan: Boolean(input.needPlan),\n      message: String(input.message ?? '')\n    }\n  }];\n}\n\n// План есть, тема подготовлена в Node A\nconst planTitle = String(input.plan_title ?? '').trim();\nconst planSize = Number(input.planSize ?? 0);\n\nconst topic = input.topic ?? {};\nconst topicId = String(topic.id ?? '');\nconst topicTitle = String(topic.title ?? '').trim();\nconst topicIndex = Number(topic.index ?? 0);\nconst topicTotal = Number(topic.total ?? 0);\n\nreturn [{\n  json: {\n    userId,\n    hasPlan: true,\n    done: false,\n    plan_title: planTitle,\n    planSize,\n    topic: {\n      id: topicId,\n      title: topicTitle,\n      index: topicIndex,\n      total: topicTotal\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1696,
+        -352
+      ],
+      "id": "8bc43e4b-8cd7-40dd-b8a9-c0d862956a4f",
+      "name": "Code5"
+    },
+    {
+      "parameters": {
+        "jsCode": "// @ts-nocheck\nconst userId = String($('Telegram Trigger').first().json?.message?.chat?.id ?? '');\nif (!userId) throw new Error('userId not found');\n\nconst sd = $getWorkflowStaticData('global');\nsd.learning ??= { users: {} };\nsd.learning.users ??= {};\n\nif (sd.learning.users[userId]) {\n  delete sd.learning.users[userId];\n}\n\nreturn [{ json: { ok: true, action: 'deleted user', userId } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2688,
+        -240
+      ],
+      "id": "bee3de2b-6c66-4b53-9358-8e26d205e017",
+      "name": "reset"
+    },
+    {
+      "parameters": {
+        "jsCode": "// @ts-nocheck\n// NODE A (State): двигает указатель вперёд и чистит static data, если план закончился.\n// Вход: userId (можно брать из Telegram Trigger, как у вас)\n\nconst userId = String($('Telegram Trigger').first().json?.message?.chat?.id ?? '');\nif (!userId) throw new Error('userId is required');\n\nconst sd = $getWorkflowStaticData('global');\nsd.learning ??= { users: {} };\nsd.learning.users ??= {};\n\nconst user = sd.learning.users[userId];\n\n// Если пользователя/плана нет — отдаём флаги и выходим\nif (!user || !Array.isArray(user.plan) || user.plan.length === 0) {\n  return [{\n    json: {\n      userId,\n      hasPlan: false,\n      needPlan: true,\n      done: false,\n      message: 'Plan not found in static data'\n    }\n  }];\n}\n\nconst planTitle = String(user.plan_title ?? '').trim();\nconst plan = user.plan;\n\nlet idx = Number.isFinite(user.currentIndex) ? user.currentIndex : 0;\n\n// Если уже за концом — чистим и выходим\nif (idx >= plan.length) {\n  user.plan = [];\n  user.plan_title = '';\n  user.currentIndex = 0;\n  user.sentByPlanItem = {};\n\n  return [{\n    json: {\n      userId,\n      hasPlan: false,\n      done: true,\n      message: 'Plan is finished'\n    }\n  }];\n}\n\n// Берём текущий пункт (до инкремента)\nconst item = plan[idx] ?? {};\nconst topicId = String(item.id ?? `p${idx + 1}`);\nconst topicTitle = String(item.title ?? '').trim() || '(без названия)';\n\n// Двигаем указатель вперёд\nuser.currentIndex = idx + 1;\n\nreturn [{\n  json: {\n    userId,\n    hasPlan: true,\n    done: false,\n    plan_title: planTitle,\n    planSize: plan.length,\n    // ВАЖНО: отдаём тему, чтобы следующая нода не лазила в static data\n    topic: {\n      id: topicId,\n      title: topicTitle,\n      index: idx + 1,\n      total: plan.length\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2544,
+        -16
+      ],
+      "id": "7f035da1-49fe-438b-8c45-790e10daffb8",
+      "name": "pointer node"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "6036dde6-ebaf-4814-beb3-e99939863ec1",
+              "leftValue": "={{ $json.message.message_id }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "21b39fb0-84c1-4d5f-83fb-792db3eee6aa",
+              "leftValue": "={{ $json.message.text }}",
+              "rightValue": "/start",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -2880,
+        -128
+      ],
+      "id": "2d242cb8-83ac-45e5-9a4c-d345a3c8749c",
+      "name": "начало"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "Чему бы ты хотел научиться? Укажи тему и напиши свой уровень. Для сброса используй ```/start```",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -2384,
+        -400
+      ],
+      "id": "99fed6d5-0b51-41f3-906d-f5d8d9ef59fb",
+      "name": "приветствие",
+      "webhookId": "41c57455-7657-44a9-b9c7-39e5c57b7b10",
+      "credentials": {
+        "telegramApi": {
+          "id": "so1YmGOticRnQ1aT",
+          "name": "ex_05"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.userId }}",
+        "text": "={{ $json.text }} \nДля сброса используй ```/start```",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -1904,
+        320
+      ],
+      "id": "40687b65-7f61-4202-ad63-c5e83bdecf62",
+      "name": "Send a text message",
+      "webhookId": "d9838dbd-2b1a-45f9-bb0f-ecb6dc9105a7",
+      "credentials": {
+        "telegramApi": {
+          "id": "so1YmGOticRnQ1aT",
+          "name": "ex_05"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "168586a4-5a0d-4a57-92a9-acd2e7c736ab",
+              "leftValue": "={{ $json.done }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -2384,
+        96
+      ],
+      "id": "8cad6410-996d-4d9b-a5e4-5a1f2dcd6d90",
+      "name": "if done"
+    },
+    {
+      "parameters": {
+        "jsCode": "// @ts-nocheck\nconst userId = $input.first().json.userId;\nconst sd = $getWorkflowStaticData('global');\nif (sd.learning?.users?.[userId]) {\n  delete sd.learning.users[userId];\n}\nreturn [{ json: { userId, text: \"Тема изучена, поздравляю! Хотите изучить что-то ещё?\" } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -2144,
+        320
+      ],
+      "id": "f4a4b5d9-77df-41a5-b1ce-f0410b095201",
+      "name": "Code in JavaScript"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code5",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "начало",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent1": {
+      "main": [
+        [
+          {
+            "node": "Telegram1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Code5",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI Agent2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code2": {
+      "main": [
+        [
+          {
+            "node": "pointer node",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model2": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent2",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent2": {
+      "main": [
+        [
+          {
+            "node": "Code3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code3": {
+      "main": [
+        [
+          {
+            "node": "Code4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code4": {
+      "main": [
+        [
+          {
+            "node": "Telegram2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code5": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "pointer node": {
+      "main": [
+        [
+          {
+            "node": "if done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "начало": {
+      "main": [
+        [
+          {
+            "node": "reset",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "reset": {
+      "main": [
+        [
+          {
+            "node": "приветствие",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "if done": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "f648be14-516c-482e-a273-7199deb5216e",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "43674541352f4caa91629af0fe47614d65590e3d481bc8724c27b5fa8baebb89"
+  },
+  "id": "yQodnokI1lP70bFK",
+  "tags": []
+}

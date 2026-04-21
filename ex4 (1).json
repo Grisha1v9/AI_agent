@@ -1,0 +1,277 @@
+{
+  "name": "ex4",
+  "nodes": [
+    {
+      "parameters": {
+        "url": "https://api.hh.ru/vacancies?text=machine+learning&area=1&per_page=8",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        -48,
+        -32
+      ],
+      "id": "b6245d19-f3cc-41cc-b3d7-94f8f16a25fd",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.data }}",
+        "options": {
+          "systemMessage": "Ты — ИИ-эксперт по анализу вакансий. Твоя задача — извлечь ключевые технические навыки и требования из описания одной вакансии.\n\nВходные данные:\n\nОписание вакансии (текст).\nТвоя задача:\n\nПрочитай описание вакансии.\nВыдели только технические навыки и инструменты (языки программирования, библиотеки, фреймворки, базы данных, технологии, инструменты, методологии).\nНе включай мягкие навыки (коммуникация, командная работа, ответственность и т.д.).\nНе включай общие формулировки (\"опыт работы\", \"знание английского\").\nПриведи навыки к единому нормативному виду (например: \"питон\" → \"python\", \"SQL\" → \"sql\", \"ML\" → \"machine learning\", \"PyTorch\" → \"pytorch\", \"PostgreSQL\" → \"postgres\" и т.д...)"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        368,
+        -32
+      ],
+      "id": "3c8499d9-0b18-4fbf-9056-bc23424cbd16",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "GigaChat/GigaChat-2-Max",
+          "mode": "list",
+          "cachedResultName": "GigaChat/GigaChat-2-Max"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        368,
+        128
+      ],
+      "id": "4b5131c4-6397-4921-ae10-812d229c2862",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "a9TD2kiZJAH3UJ7K",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "-1003628278092",
+        "text": "={{ $json.output }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        912,
+        -32
+      ],
+      "id": "3389ac6d-bc5a-464a-acb9-3f52fa32a6ca",
+      "name": "Send a text message",
+      "webhookId": "5ab12181-9627-4705-8e71-6aa401e65807",
+      "credentials": {
+        "telegramApi": {
+          "id": "Jq9frswXky4HhCpu",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.output }}",
+        "options": {
+          "systemMessage": "Ты — аналитик данных. Твоя задача — обработать список навыков, извлечённых из нескольких вакансий, и подготовить дайджест.\n\nВходные данные:\n\nМассив строк, где каждая строка — это список навыков из одной вакансии (например: \"python, sql, postgres\").\nТвоя задача:\n\nОбъедини все навыки из всех строк в один общий список.\nНормализуй каждый навык (приведи к единому виду: \"питон\" → \"python\", \"SQL\" → \"sql\", \"ML\" → \"machine learning\", \"PyTorch\" → \"pytorch\", и т.д. — используй полный список нормализации, приведённый ниже).\nПодсчитай частоту каждого уникального навыка.\nОтсортируй навыки по убыванию частоты.\nВозьми топ-15 самых частых навыков.\nСформируй дайджест в строго заданном формате:\nНа этой неделе я спарсил N свежих вакансий по выбранному тобой направлению. Самыми популярными являются следующие требования:\n\nтребование 1: количество\nтребование 2: количество\nтребование 3: количество\n…\n\nГде N — количество вакансий (в твоём случае 8, или можно взять из $json[\"found\"]).\nВажно:\n\nНе добавляй ничего лишнего — только дайджест.\nВсе навыки должны быть в нижнем регистре.\nНе используй маркеры, списки, заголовки — только чистый текст.\nЕсли навык встречается 1 раз — всё равно его включай в топ-15, если он входит в топ-15.\nСписок нормализации (часть):\n\"питон\" → \"python\", \"SQL\" → \"sql\", \"ML\" → \"machine learning\", \"PyTorch\" → \"pytorch\" и т.д\nтакже\nИсключи из подсчёта всё, что не является конкретной технологией или инструментом."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        640,
+        -32
+      ],
+      "id": "5add0ff2-3412-4e42-baa1-417597eac49b",
+      "name": "AI Agent1"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "GigaChat/GigaChat-2-Max",
+          "mode": "list",
+          "cachedResultName": "GigaChat/GigaChat-2-Max"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        624,
+        128
+      ],
+      "id": "0bfb5f9a-8bc4-4754-ba4e-482868582e06",
+      "name": "OpenAI Chat Model1",
+      "credentials": {
+        "openAiApi": {
+          "id": "a9TD2kiZJAH3UJ7K",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "daysInterval": 6,
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -208,
+        -32
+      ],
+      "id": "0e56b0bc-08d4-48d6-93b8-556ce9f63abe",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "items",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [
+        80,
+        -128
+      ],
+      "id": "2a91daff-82d3-4880-803a-cec6d4a275b2",
+      "name": "Split Out"
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        240,
+        -128
+      ],
+      "id": "8818a42f-493e-4513-a5a1-93893e9d0eb0",
+      "name": "Aggregate"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent1": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "Aggregate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "971956b0-bf0c-40e9-b114-72af4cbc7572",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "43674541352f4caa91629af0fe47614d65590e3d481bc8724c27b5fa8baebb89"
+  },
+  "id": "mb9NHj3ZLSjOZeTh",
+  "tags": []
+}
